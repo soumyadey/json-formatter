@@ -19,7 +19,7 @@ DATA = Path(__file__).parent / "data"
 
 def load_formatter():
     spec = importlib.util.spec_from_file_location(
-        "format_json", Path(__file__).parent.parent / "format-json.py"
+        "format_json", Path(__file__).parent.parent / "format_json.py"
     )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -106,29 +106,27 @@ def test_long_object_expands():
 def test_uniform_all_expand_if_one_long():
     """uniform mode: if any item in an array doesn't fit, all expand."""
     data = [
-        {"id": "hot", "name": "Hot"},
-        {"id": "warm", "name": "Warm", "description": "Some interest, no urgency, no specific timeline"},
-        {"id": "cold", "name": "Cold"},
+        {"id": "a", "name": "Short"},
+        {"id": "b", "name": "Medium", "description": "This description is long enough to not fit on one line"},
+        {"id": "c", "name": "Short"},
     ]
     result = fmt(data, array_items="uniform", max_line=80)
     lines = result.strip().splitlines()
-    # Every object item should be on its own line (expanded, not inlined after comma)
-    item_lines = [l for l in lines if '"id"' in l]
+    item_lines = [line for line in lines if '"id"' in line]
     assert len(item_lines) == 3
 
 
 def test_smart_allows_mixed():
     """smart mode: short items stay on one line even if others expand."""
     data = [
-        {"id": "hot", "name": "Hot"},
-        {"id": "warm", "name": "Warm", "description": "Some interest, no urgency, no specific timeline, extra text here"},
-        {"id": "cold", "name": "Cold"},
+        {"id": "a", "name": "Short"},
+        {"id": "b", "name": "Medium",
+         "description": "This description is long enough to not fit on one line here"},
+        {"id": "c", "name": "Short"},
     ]
     result = fmt(data, array_items="smart", max_line=80)
-    # hot and cold should be on one line each; warm should expand
-    assert '{ "id": "hot"' in result
-    assert '{ "id": "cold"' in result
-    # warm's description should appear on its own line
+    assert '{ "id": "a"' in result
+    assert '{ "id": "c"' in result
     assert '"description"' in result
 
 
@@ -143,17 +141,15 @@ def test_always_expand_forces_expansion():
 
 def test_always_inline_forces_inline():
     """--always-inline forces array to stay on one line regardless of max_line."""
-    data = {"tags": ["rule-a", "rule-b", "rule-c", "rule-d"]}
+    data = {"tags": ["foo", "bar", "baz", "qux"]}
     result = fmt(data, always_inline=["$.tags"], max_line=10)
-    # All items on one line despite tiny max_line
-    assert '["rule-a", "rule-b", "rule-c", "rule-d"]' in result
+    assert '["foo", "bar", "baz", "qux"]' in result
 
 
 def test_always_inline_nested_array_elements():
     """$.parent[*].child means each child array in each parent element is inlined."""
-    data = {"entities": [{"id": "a", "ruleIds": ["x", "y"]}, {"id": "b", "ruleIds": ["z"]}]}
-    result = fmt(data, always_inline=["$.entities[*].ruleIds"], max_line=20)
-    # ruleIds arrays should be on one line
+    data = {"groups": [{"id": "a", "items": ["x", "y"]}, {"id": "b", "items": ["z"]}]}
+    result = fmt(data, always_inline=["$.groups[*].items"], max_line=20)
     assert '["x", "y"]' in result
     assert '["z"]' in result
 
@@ -161,9 +157,10 @@ def test_always_inline_nested_array_elements():
 def test_config_file_toml(tmp_path):
     """--config reads fmt.toml from test data; output matches expected.json."""
     out_file = tmp_path / "out.json"
-    import subprocess, sys
+    import subprocess
+    import sys
     result = subprocess.run(
-        [sys.executable, str(Path(__file__).parent.parent / "format-json.py"),
+        [sys.executable, str(Path(__file__).parent.parent / "format_json.py"),
          "-c", str(DATA / "fmt.toml"),
          str(DATA / "input.json"),
          "-o", str(out_file)],
@@ -190,13 +187,13 @@ def test_max_line_boundary():
 
 
 def test_unicode_preserved():
-    result = fmt({"name": "Joule®"})
+    result = fmt({"name": "café"})
     parsed = json.loads(result)
-    assert parsed["name"] == "Joule®"
+    assert parsed["name"] == "café"
 
 
 def test_value_wrapper_array_stays_inline():
-    """[{ "value": "..." }] stays on one line (common CBC attr pattern)."""
-    data = {"configurationObjectId": [{"value": "lead-scoring"}]}
+    """[{ "value": "..." }] single-item wrapper stays on one line."""
+    data = {"fieldId": [{"value": "some-value"}]}
     result = fmt(data)
-    assert '[{ "value": "lead-scoring" }]' in result
+    assert '[{ "value": "some-value" }]' in result
