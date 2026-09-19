@@ -1,0 +1,9 @@
+indent = 2
+max_line = 120
+array_items = "uniform"
+always_inline = ["$.always_inline_target[*]"]
+always_expand = [
+  "$.always_expand_target",
+  "$.always_expand_each_item",
+  "$.always_expand_each_item[*]"
+]
